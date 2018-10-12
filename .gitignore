@@ -1,4 +1,6 @@
 *.log
+*-old
+*.tmp
 wp-config.php
 wp-content/advanced-cache.php
 wp-content/backup-db/
@@ -10,6 +12,10 @@ wp-content/uploads/
 wp-content/mu-plugins/
 wp-content/wp-cache-config.php
 wp-content/plugins/hello.php
+wp-content/plugins-old/
+wp-content/themes-old/
+wp-content/uploads-old/
+wp-content/updraft/
 
 /.htaccess
 /license.txt
@@ -17,3 +23,7 @@ wp-content/plugins/hello.php
 /sitemap.xml
 /sitemap.xml.gz
 
+error_log
+/..*
+*.swp
+.DS_Store
