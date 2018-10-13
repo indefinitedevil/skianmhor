@@ -475,21 +475,26 @@ class WCK_FrontEnd_Posting extends Wordpress_Creation_Kit{
 				default:
 					/* take care of taxonomies */
 					if( !empty( $this->args['taxonomies'] ) ){
+						$tax_values = array();
 						foreach( $this->args['taxonomies'] as $taxonomy ){
 
 							if( $details['title'] == $taxonomy->label || $details['slug'] == $taxonomy->name ){
 								$object_terms = wp_get_object_terms( $post->ID, $taxonomy->name );
 								
 								if(!empty($object_terms)){
-								  if(!is_wp_error( $object_terms )){
-									foreach($object_terms as $term){
-										$value[] = $term->name;
-									}
+									if(!is_wp_error( $object_terms )){
+										foreach($object_terms as $term){
+											$tax_values[] = $term->name;
+										}
 
-									/* if not hyerarhical return string not array */
-									if( !$taxonomy->hierarchical )
-										$value = implode( ', ', $value );
-								  }
+										/* if not hyerarhical return string not array */
+										if( !$taxonomy->hierarchical ){
+											$value = implode( ', ', $tax_values );
+										}
+										else{
+											$value = $tax_values;
+										}
+									}
 								}
 							}							
 						}

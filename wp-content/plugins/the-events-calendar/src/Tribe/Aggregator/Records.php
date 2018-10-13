@@ -2,8 +2,7 @@
 // Don't load directly
 defined( 'WPINC' ) or die;
 
-class
-Tribe__Events__Aggregator__Records {
+class Tribe__Events__Aggregator__Records {
 	/**
 	 * Slug of the Post Type used for Event Aggregator Records
 	 *
@@ -290,11 +289,14 @@ Tribe__Events__Aggregator__Records {
 	}
 
 	/**
-	 * Returns an appropriate Record object for the given origin
+	 * Returns an appropriate Record object for the given origin.
 	 *
-	 * @param string $origin Import origin
+	 * @param string $origin The record import origin.
+	 * @param int|WP_Post The record post or post ID.
 	 *
-	 * @return Tribe__Events__Aggregator__Record__Abstract|null
+	 * @return Tribe__Events__Aggregator__Record__Abstract An instance of the correct record class
+	 *                                                     for the origin or an unsupported record
+	 *                                                     instance.
 	 */
 	public function get_by_origin( $origin, $post = null ) {
 		$record = null;
@@ -320,10 +322,6 @@ Tribe__Events__Aggregator__Records {
 			case 'ea/ics':
 				$record = new Tribe__Events__Aggregator__Record__ICS( $post );
 				break;
-			case 'facebook':
-			case 'ea/facebook':
-				$record = new Tribe__Events__Aggregator__Record__Facebook( $post );
-				break;
 			case 'meetup':
 			case 'ea/meetup':
 				$record = new Tribe__Events__Aggregator__Record__Meetup( $post );
@@ -332,7 +330,22 @@ Tribe__Events__Aggregator__Records {
 			case 'ea/url':
 				$record = new Tribe__Events__Aggregator__Record__Url( $post );
 				break;
+			default:
+				// If there is no match then the record type is unsupported.
+				$record = new Tribe__Events__Aggregator__Record__Unsupported( $post );
+				break;
 		}
+
+		/**
+		 * Allows filtering of Record object for custom origins and overrides.
+		 *
+		 * @since 4.6.24
+		 *
+		 * @param Tribe__Events__Aggregator__Record__Abstract|null $record Record object for given origin.
+		 * @param string                                           $origin Import origin.
+		 * @param WP_Post|null                                     $post   Record post data.
+		 */
+		$record = apply_filters( 'tribe_aggregator_record_by_origin', $record, $origin, $post );
 
 		return $record;
 	}
@@ -425,8 +438,17 @@ Tribe__Events__Aggregator__Records {
 
 	}
 
+	/**
+	 * Returns a WP_Query object built using some default arguments for records.
+	 *
+	 * @param array $args An array of arguments to override the default ones.
+	 *
+	 * @return WP_Query The built WP_Query object; since it's built with arguments
+	 *                  the query will run, actually hitting the database, before
+	 *                  returning.
+	 */
 	public function query( $args = array() ) {
-		$statuses = Tribe__Events__Aggregator__Records::$status;
+		$statuses = self::$status;
 		$defaults = array(
 			'post_status' => array( $statuses->success, $statuses->failed, $statuses->pending ),
 			'orderby'     => 'modified',
@@ -449,13 +471,11 @@ Tribe__Events__Aggregator__Records {
 
 		$args = (object) wp_parse_args( $args, $defaults );
 
-		// Enforce the Post Type
+		// Enforce the post type.
 		$args->post_type = self::$post_type;
 
-		// Do the actual Query
-		$query = new WP_Query( $args );
-
-		return $query;
+		// Run and return the query.
+		return new WP_Query( $args );
 	}
 
 	/**
@@ -561,8 +581,18 @@ Tribe__Events__Aggregator__Records {
 			return wp_send_json_error();
 		}
 
-		// Actually import things
-		$record->process_posts( $request );
+		if ( ! empty( $_GET['trigger_new'] ) ) {
+			$_GET['tribe_queue_sync'] = true;
+
+			$record->update_meta( 'in_progress', null );
+			$record->update_meta( 'queue_id', null );
+
+			$record->set_status_as_pending();
+			$record->process_posts( $request, true );
+			$record->set_status_as_success();
+		} else {
+			$record->process_posts( $request, true );
+		}
 
 		return wp_send_json_success();
 	}
@@ -672,6 +702,9 @@ Tribe__Events__Aggregator__Records {
 		// Edit Link Filter
 		add_filter( 'get_edit_post_link', array( $this, 'filter_edit_link' ), 15, 3 );
 
+		// Filter Eventbrite to Add Site to URL
+		add_filter( 'tribe_aggregator_get_import_data_args', array( 'Tribe__Events__Aggregator__Record__Eventbrite', 'filter_add_site_get_import_data' ), 10, 2 );
+
 		// Filter ical events to preserve some fields that aren't supported by iCalendar
 		add_filter( 'tribe_aggregator_before_update_event', array( 'Tribe__Events__Aggregator__Record__iCal', 'filter_event_to_preserve_fields' ), 10, 2 );
 
@@ -681,16 +714,55 @@ Tribe__Events__Aggregator__Records {
 		// Filter gcal events to preserve some fields that aren't supported by Google Calendar
 		add_filter( 'tribe_aggregator_before_update_event', array( 'Tribe__Events__Aggregator__Record__gCal', 'filter_event_to_preserve_fields' ), 10, 2 );
 
-		// Filter facebook events to force an event URL
-		add_filter( 'tribe_aggregator_before_save_event', array( 'Tribe__Events__Aggregator__Record__Facebook', 'filter_event_to_force_url' ), 10, 2 );
-
-		// Filter facebook events to preserve some fields that aren't supported by Facebook
-		add_filter( 'tribe_aggregator_before_update_event', array( 'Tribe__Events__Aggregator__Record__Facebook', 'filter_event_to_preserve_fields' ), 10, 2 );
-
 		// Filter meetup events to force an event URL
 		add_filter( 'tribe_aggregator_before_save_event', array( 'Tribe__Events__Aggregator__Record__Meetup', 'filter_event_to_force_url' ), 10, 2 );
 
 		// Filter meetup events to preserve some fields that aren't supported by Meetup
 		add_filter( 'tribe_aggregator_before_update_event', array( 'Tribe__Events__Aggregator__Record__Meetup', 'filter_event_to_preserve_fields' ), 10, 2 );
+
+		// Filter eventbrite events to preserve some fields that aren't supported by Eventbrite
+		add_filter( 'tribe_aggregator_before_update_event', array( 'Tribe__Events__Aggregator__Record__Eventbrite', 'filter_event_to_preserve_fields' ), 10, 2 );
+	}
+
+	/**
+	 * Filter records by source and data hash.
+	 *
+	 * @param string $source    Source value.
+	 * @param string $data_hash Data hash.
+	 *
+	 * @since TBD
+	 *
+	 * @return Tribe__Events__Aggregator__Record__Abstract|false Record object or false if not found.
+	 */
+	public function find_by_data_hash( $source, $data_hash ) {
+		/** @var WP_Query $matches */
+		$matches = $this->query( array(
+			'post_status' => $this->get_status( 'schedule' )->name,
+			'meta_query'  => array(
+				array(
+					'key'   => $this->prefix_meta( 'source' ),
+					'value' => $source,
+				),
+			),
+			'fields'      => 'ids',
+		) );
+
+		if ( empty( $matches->posts ) ) {
+			return false;
+		}
+
+		foreach ( $matches->posts as $post_id ) {
+			$this_record = $this->get_by_post_id( $post_id );
+
+			if ( ! $this_record instanceof Tribe__Events__Aggregator__Record__Abstract ) {
+				continue;
+			}
+
+			if ( $data_hash === $this_record->get_data_hash() ) {
+				return $this_record;
+			}
+		}
+
+		return false;
 	}
 }

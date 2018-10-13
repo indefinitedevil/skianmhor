@@ -118,6 +118,7 @@ class WC_Countries {
 			'KR' => array(),
 			'KW' => array(),
 			'LB' => array(),
+			'LU' => array(),
 			'MQ' => array(),
 			'NL' => array(),
 			'NO' => array(),
@@ -613,6 +614,12 @@ class WC_Countries {
 	 * @return array
 	 */
 	public function get_default_address_fields() {
+		if ( 'optional' === get_option( 'woocommerce_checkout_address_2_field', 'optional' ) ) {
+			$address_2_placeholder = __( 'Apartment, suite, unit etc. (optional)', 'woocommerce' );
+		} else {
+			$address_2_placeholder = __( 'Apartment, suite, unit etc.', 'woocommerce' );
+		}
+
 		$fields = array(
 			'first_name' => array(
 				'label'        => __( 'First name', 'woocommerce' ),
@@ -653,9 +660,8 @@ class WC_Countries {
 				'priority'     => 50,
 			),
 			'address_2'  => array(
-				'placeholder'  => esc_attr__( 'Apartment, suite, unit etc. (optional)', 'woocommerce' ),
+				'placeholder'  => esc_attr( $address_2_placeholder ),
 				'class'        => array( 'form-row-wide', 'address-field' ),
-				'required'     => false,
 				'autocomplete' => 'address-line2',
 				'priority'     => 60,
 				'required'     => 'required' === get_option( 'woocommerce_checkout_address_2_field', 'optional' ),
@@ -786,6 +792,11 @@ class WC_Countries {
 						'state'    => array(
 							'required' => false,
 							'label'    => __( 'Province', 'woocommerce' ),
+						),
+					),
+					'BH' => array(
+						'state' => array(
+							'required' => false,
 						),
 					),
 					'BI' => array(
@@ -1087,6 +1098,11 @@ class WC_Countries {
 						),
 					),
 					'LK' => array(
+						'state' => array(
+							'required' => false,
+						),
+					),
+					'LU' => array(
 						'state' => array(
 							'required' => false,
 						),
