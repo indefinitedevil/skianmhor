@@ -27,3 +27,5 @@ error_log
 /..*
 *.swp
 .DS_Store
+.idea
+dbfix.php
