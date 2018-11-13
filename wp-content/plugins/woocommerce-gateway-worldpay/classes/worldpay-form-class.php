@@ -45,7 +45,7 @@
 			$this->default_dynamiccallback 		= false;
 			$this->default_submission			= 'form';
 
-			$this->version						= '3.6.1';
+			$this->version						= '3.6.4';
 
 			// Load the form fields
 			$this->init_form_fields();
@@ -106,7 +106,7 @@
 			add_action( 'woocommerce_payment_complete', array( $this, 'redirect' ) );
 
 			// When a subscriber or store manager changes a subscription's status in the store, change the status with WorldPay
-			add_action( 'cancelled_subscription_worldpay', array( $this, 'cancel_subscription_with_worldpay'), 10, 2 );
+			add_action( 'woocommerce_subscription_cancelled_worldpay', array( $this, 'cancel_subscription_with_worldpay'), 10, 2 );
 
 			// Remove subs support if $this->dynamiccallback is TRUE or remote ID is not set
 			if( $this->dynamiccallback || $this->remoteid == '' ) {
@@ -123,7 +123,8 @@
 					'subscriptions',
 					'gateway_scheduled_payments',
 					'subscription_cancellation',
-					'refunds'
+					'refunds',
+					'subscription_amount_changes'
 				);	
 
 			}
@@ -142,6 +143,11 @@
 				$this->description  = trim( $this->description );
 			}
 
+			// Set CallBackPW to development credentials if necessary
+			if( isset($this->settings['developer']) && $this->settings['developer'] === 'yes' ) {
+				$this->callbackPW = 'b73571A64';
+			}
+
 		} // END __construct
 
 		protected static function liveurl() {
@@ -154,7 +160,13 @@
 
 		protected static function status() {
 			$settings = get_option( 'woocommerce_worldpay_settings' );
-			return $settings['status'];
+			// Set status to development credentials if necessary
+			if( $settings['developer'] === 'yes' ) {
+				return 'testing';
+			} else {
+				return $settings['status'];
+			}
+			
 		}
 
 		protected static function debug() {
@@ -302,16 +314,17 @@
 					<p class="alignright"><a class="submitdelete button-primary" href="<?php echo admin_url('admin.php?page=wc-settings&tab=checkout&section=wc_gateway_worldpay_form&worldpay_settings_ignore=0'); ?>">Hide WorldPay Settings</a></p>
 			   	
 					<p><?php _e('<strong>These are the settings that should be entered into your WorldPay Installation, <a href="https://secure.worldpay.com/sso/public/auth/login.html?serviceIdentifier=merchantadmin&maiversion=version2" target="_blank">login to WorldPay here.</a></strong>', 'woocommerce_worlday'); ?></p>
-					<p>
+					
+					<p><?php echo '<strong>Installation ID :</strong>  ' . $this->instId; ?><br />
 
 					<?php if( $this->dynamiccallback ) {
 						echo '<strong>Payment Response URL :</strong>  ' . htmlspecialchars('<wpdisplay item=MC_callback>');
 					} else {
 
 						if( '' != get_option( 'permalink_structure' ) ) {
-							echo '<strong>Payment Response URL :</strong>  ' . site_url( '/wc-api/WC_Gateway_WorldPay_Form' );
+							echo '<strong>Payment Response URL :</strong>  ' . home_url( '/wc-api/WC_Gateway_WorldPay_Form' );
 						} else {
-							echo '<strong>Payment Response URL :</strong>  ' . site_url( '/?wc-api=WC_Gateway_WorldPay_Form' );
+							echo '<strong>Payment Response URL :</strong>  ' . home_url( '/?wc-api=WC_Gateway_WorldPay_Form' );
 						}
 						
 					} ?>
@@ -360,7 +373,9 @@
 		 */
 		function payment_fields() {
 
-			if ($this->description) echo wpautop(wptexturize($this->description));
+			if ( $this->description ) {
+				echo wpautop( wptexturize($this->description) );
+			}
 
 		} // END payment_fields
 
@@ -587,6 +602,8 @@
 			
 				// Normal transaction at the front end
 	        	$order->payment_complete( $worldpay_return_values['transId'] );
+	        	// Clear the cart, just in case
+	        	WC()->cart->empty_cart();
 				wp_redirect( $this->get_return_url( $order, $worldpay_return_values ) );
 				exit;
 				
@@ -617,6 +634,8 @@
 
 				// Normal transaction at the front end
 	        	$order->payment_complete( $worldpay_return_values['transId'] );
+	        	// Clear the cart, just in case
+	        	WC()->cart->empty_cart();
 	        	exit;
 				
 			}
@@ -779,6 +798,8 @@
 						$renewal_order 			= wcs_create_renewal_order( $subscription );
 
 						$renewal_order->payment_complete( $worldpay_response['transId'] );
+						// Clear the cart, just in case
+	        			WC()->cart->empty_cart();
 						$renewal_order->add_order_note( __( 'WorldPay subscription payment completed.', 'woocommerce_worlday' ) );
 
 						// Set WorldPay as the payment method (we can't use $renewal_order->set_payment_method() here as it requires an object we don't have)
@@ -933,9 +954,11 @@
 
 			if ( $query_string ) {
 
+				$msgType = ( isset( $output['msgType'] ) && $output['msgType'] != '' ) ? $output['msgType'] : '';
+
 				parse_str( $query_string , $output );
 
-				$output['subscriptionurl'] = $output['subscriptionurl'] . '&msgType=' . $output['msgType'] . '&wc-api=' . $output['wc-api'];
+				$output['subscriptionurl'] = $output['subscriptionurl'] . '&msgType=' . $msgType . '&wc-api=' . $output['wc-api'];
 				unset( $output['msgType'] );
 				unset( $output['wc-api'] );
 
@@ -951,18 +974,16 @@
 		 * 
 		 * When a store manager or user cancels a subscription in the store, also cancel the subscription with WorldPay. 
 		 */
-		function cancel_subscription_with_worldpay( $order, $product_id ) {
+		function cancel_subscription_with_worldpay( $subscription ) {
 			global $woocommerce;
 
-			// WooCommerce 3.0 compatibility 
-        	$order_id   = is_callable( array( $order, 'get_id' ) ) ? $order->get_id() : $order->id;
-
-			$profile_id = get_post_meta( $order_id, '_futurepayid', TRUE );
+			$profile_id = get_post_meta( $subscription->parent_id, '_futurepayid', TRUE );
 
 			$response = $this->change_subscription_status( $profile_id, 'Cancel' );
-			
+
 			if ( isset( $response['ACK'] ) && $response['ACK'] == 'Success' ) {
-				$order->add_order_note( sprintf( __( 'Subscription "%s" cancelled', 'woocommerce_worlday' ), $item['name'] ) );
+				$order 	 = new WC_Order( (int) $subscription->parent_id );
+				$order->add_order_note( __( 'Subscription cancelled', 'woocommerce_worlday' ) );
 			}
 		}
 
@@ -982,7 +1003,7 @@
 					$new_status_string = __( 'cancelled', 'woocommerce_worlday' );
 
 					// New API Request for cancellations
-					$api_request 				= '';
+					$api_request 				= array();
 					$api_request['instId'] 		= urlencode( $this->remoteid );
 					$api_request['authPW'] 		= urlencode( $this->remotepw );
 					$api_request['futurePayId'] = $profile_id;
@@ -990,6 +1011,14 @@
 
 					break;
 			}
+
+			// Debugging
+			if ( $this->debug == true ) {
+   				$this->log->add( $this->id, __('WorldPay Cancel Subscription Request', 'woocommerce_worlday') . '');
+   				$this->log->add( $this->id, '====================================' );
+   				$this->log->add( $this->id, print_r( str_replace( '<br />',"\n", $api_request ), TRUE ) );
+   				$this->log->add( $this->id, '====================================' );
+   			}
 
 			$cancel_array = array(
 									'method' 		=> 'POST',
@@ -1003,6 +1032,14 @@
     							);
 
 			$res = wp_remote_post( $curlurl, $cancel_array );
+
+			// Debugging
+			if ( $this->debug == true ) {
+   				$this->log->add( $this->id, __('WorldPay Cancel Subscription Response', 'woocommerce_worlday') . '');
+   				$this->log->add( $this->id, '====================================' );
+   				$this->log->add( $this->id, print_r( str_replace( '<br />',"\n", $res['body'] ), TRUE ) );
+   				$this->log->add( $this->id, '====================================' );
+   			}
 
 			if( is_wp_error( $res ) ) {
 
@@ -1037,7 +1074,7 @@
 		 */
     	function process_refund( $order_id, $amount = NULL, $reason = '' ) {
 
-    		$api_request = '';
+    		$api_request = array();
 
 			if ( self::status() == 'testing' ) :
 				$curlurl = 'https://secure-test.worldpay.com/wcc/itransaction';
@@ -1056,6 +1093,14 @@
 			$api_request['currency'] 			= get_woocommerce_currency();
 			$api_request['op'] 					= 'refund-partial';
 
+			// Debugging
+			if ( $this->debug == true ) {
+   				$this->log->add( $this->id, __('WorldPay Refund Request', 'woocommerce_worlday') . '');
+   				$this->log->add( $this->id, '====================================' );
+   				$this->log->add( $this->id, print_r( str_replace( '<br />',"\n", $api_request ), TRUE ) );
+   				$this->log->add( $this->id, '====================================' );
+   			}
+
 			$cancel_array = array(
 									'method' 		=> 'POST',
 									'timeout' 		=> 45,
@@ -1069,6 +1114,14 @@
 
 			$res = wp_remote_post( $curlurl, $cancel_array );
 
+			// Debugging
+			if ( $this->debug == true ) {
+   				$this->log->add( $this->id, __('WorldPay Refund Response', 'woocommerce_worlday') . '');
+   				$this->log->add( $this->id, '====================================' );
+   				$this->log->add( $this->id, print_r( str_replace( '<br />',"\n", $res['body'] ), TRUE ) );
+   				$this->log->add( $this->id, '====================================' );
+   			}
+
 			if( is_wp_error( $res ) ) {
 
 				$content = 'There was a problem Refunding this payment for order ' . $order_id . '. The Transaction ID is ' .$api_request['transId']. '.The API Request is <pre>' . 
@@ -1076,6 +1129,8 @@
 					print_r( $res['body'],TRUE ) . '</pre>. You may need to contact WorldPay for more information about this error.';
 
 				wp_mail( $this->worldpaydebugemail ,'WorldPay Refund Failure 01 ' . time(), $content );
+
+				return new WP_Error( 'error', __('Refund failed ', 'woocommerce_worlday')  . "\r\n" . $res['body'] );
 
 			} elseif ( !$this->startsWith( $res['body'], 'A' ) ) {
 
@@ -1086,6 +1141,8 @@
 					
 					wp_mail( $this->worldpaydebugemail ,'WorldPay Refund Failure 02 ' . time(), $content );
 
+					return new WP_Error( 'error', __('Refund failed ', 'woocommerce_worlday')  . "\r\n" . $res['body'] );
+
 			} else {
 				// Check WC version - changes for WC 3.0.0
 				$pre_wc_30 		= version_compare( WC_VERSION, '3.0', '<' );
@@ -1094,12 +1151,6 @@
 
 				$order 	     	= new WC_Order( (int) $order_id );
 				$order_currency = $pre_wc_30 ? $order->get_order_currency() : $order->get_currency();
-
-				$order_note  = '<br />Refund Amount : ' . wc_price( $amount, array( 'currency' => $order_currency ) );
-				$order_note .= '<br />Refund Reason : ' . $reason;
-				$order_note .= '<br />Transaction Id : ' . $transactionid[1];
-
-				// $order->add_order_note( sprintf( __( 'Order Refunded %s', 'woocommerce_worlday' ), $order_note ) );
 
 				$order->add_order_note( sprintf( __( 'Order Refunded<br />Refund Amount - %1$s<br />Refund Reason - %2$s<br />Transaction Id - %3$s', 'woocommerce_worlday' ), wc_price( $amount, array( 'currency' => $order_currency ) ), $reason, $transactionid[1] ) );
 

@@ -3,9 +3,12 @@
 Plugin Name: WooCommerce WorldPay Gateway
 Plugin URI: http://woothemes.com/woocommerce/
 Description: Extends WooCommerce. Provides a WorldPay gateway for WooCommerce. Includes basic support for Subscriptions. http://www.worldpay.com.
-Version: 3.6.1
-Author: Add On Enterprises (Andrew Benbow)
-Author URI: http://www.addonenterprises.com
+Version: 3.6.6
+Author: Andrew Benbow
+Author URI: http://www.chromeorange.co.uk
+WC requires at least: 2.6.0
+WC tested up to: 3.5.0
+Woo: 18646:6bc48c9d12dc0c43add4b099665a80b0
 */
 
 /*  Copyright 2011  Andrew Benbow  (email : andrew@chromeorange.co.uk)

@@ -68,7 +68,7 @@
 				    							'title'         => __( 'Dynamic Callback', 'woocommerce_worlday' ),
 				    							'type'          => 'checkbox',
 				    							'options'       => array('no'=>'No','yes'=>'Yes'),
-				    							'label'     	=> class_exists( 'WC_Subscriptions' ) ? __( 'Are you using a Dynamic Callback in your Payment Response URL field? <strong>DO NOT check this option if you are using WorldPay to process your subscription payments / renewals</strong>' , 'woocommerce_worlday' ) : __( 'Are you using a Dynamic Callback in your Payment Response URL field?' , 'woocommerce_worlday' ),
+				    							'label'     	=> class_exists( 'WC_Subscriptions' ) ? __( 'Are you using a Dynamic Callback in your Payment Response URL field?<br /><strong>DO NOT check this option if you are using WorldPay to process your subscription payments / renewals<br />DO NOT check this option unless you are using your Installtion ID on more than one site.</strong>' , 'woocommerce_worlday' ) : __( 'Are you using a Dynamic Callback in your Payment Response URL field?' , 'woocommerce_worlday' ),
 				    							'default'       => $this->default_dynamiccallback
 												),
 				'worldpaydebugemail' 	=> array(
@@ -209,6 +209,19 @@
 												'options' 		=> array('yes'=>'Yes','no'=>'No'),
 												'description' 	=> __( 'This suppresses the display of the language menu at WorldPay', 'woocommerce_worlday' ),
 												'default' 		=> $this->default_noLanguageMenu
+												),
+				'developer_options' 	=> array(
+												'title' 		=> __( 'Developer Options', 'woocommerce_worlday' ),
+												'type' 			=> 'title',
+												'description' 	=> __( '<div style="display:block; border-bottom:1px dotted #000; width:100%;">This setting is just for setting developer credentials. Leave set to NO.</div>', 'woocommerce_worlday' )
+												),	
+
+				'developer' 			=> array(
+												'title' 		=> __( 'Use developer credentials?', 'woocommerce_worlday' ),
+												'type' 			=> 'select',
+												'options' 		=> array('yes'=>'Yes','no'=>'No'),
+												'description' 	=> __( '', 'woocommerce_worlday' ),
+												'default' 		=> 'no'
 												),
 				'close_options' 		=> array(
 												'title' 		=> __( '', 'woocommerce_worlday' ),

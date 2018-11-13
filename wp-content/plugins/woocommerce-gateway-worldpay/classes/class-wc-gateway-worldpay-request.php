@@ -21,6 +21,9 @@ class WC_Gateway_WorldPay_Request {
 	 */
 	protected $notify_url;
 
+	// Developer Credentials
+	protected $dev_installtion_id = '1156961';
+
 	/**
 	 * Constructor
 	 * @param WC_Gateway_WorldPay $gateway
@@ -61,6 +64,37 @@ class WC_Gateway_WorldPay_Request {
 		}
 
 	}
+
+	public static function get_instid ( $instid, $developer='no' ) {
+		if( $developer === 'yes' ) {
+			return '1156961';
+		} else {
+			return $instid;
+		}
+	}
+
+	public static function get_payment_response_url ( $dynamiccallback, $developer='no' ) {
+		if( $developer === 'yes' ) {
+			return 'yes';
+		} else {
+			return $dynamiccallback;
+		}
+
+	}
+
+	public static function get_md5_secret ( $worldpaymd5, $developer='no' ) {
+		if( $developer === 'yes' ) {
+			return 'b73571A64bc1b395A959b4f66X$';
+		} else {
+			return $worldpaymd5;
+		}
+
+	}
+
+	protected static function get_payment_response_password ( $instid, $developer='no' ) {
+
+	}
+
 
 	/**
 	 * Get WorldPay Args for passing to WorldPay
@@ -112,7 +146,7 @@ class WC_Gateway_WorldPay_Request {
 
 		$output_order_num = self::get_worldpay_order_num( $order );
 
-		if( $settings['dynamiccallback'] === 'yes' ) {
+		if( self::get_payment_response_url( $settings['dynamiccallback'], $settings['developer'] ) === 'yes' ) {
 			$callbackurl   	= site_url( 'wp-content/plugins/woocommerce-gateway-worldpay/wpcallback.php' );
 			$successurl   	= site_url( 'wp-content/plugins/woocommerce-gateway-worldpay/wpcallback.php' );
 		} else {
@@ -124,7 +158,7 @@ class WC_Gateway_WorldPay_Request {
 		$failureurl 		= str_replace( '&amp;', '&', $order->get_cancel_order_url() );
 		$failureurl 		= str_replace( 'https:', 'http:', $failureurl );
 
-		$worldpay_args['instId'] 	= $settings['instId'];
+		$worldpay_args['instId'] 	= self::get_instid( $settings['instId'], $settings['developer'] );
 		$worldpay_args['cartId'] 	= str_replace( self::clean_array(), '',  $order_key . '-' . $output_order_num . '-' . time() );
 		$worldpay_args['amount']	= self::get_worldpay_order_amount( $order );
 		$worldpay_args['currency'] 	= $order_currency;
@@ -195,11 +229,11 @@ class WC_Gateway_WorldPay_Request {
 		 *
 		 * instId:amount:currency:cartId:name:email:address1:postcode
 		 */
-		if ( $settings['worldpaymd5'] != '' ) {
+		if ( self::get_md5_secret( $settings['worldpaymd5'], $settings['developer'] ) != '' ) {
 
 			$worldpay_args['signatureFields'] = 'instId:amount:currency:cartId:name:email:address1:postcode';
 
-			$build_signature = $settings['worldpaymd5'].':'.$worldpay_args['instId'].':'.$worldpay_args['amount'].':'.$worldpay_args['currency'].':'.$worldpay_args['cartId'].':'.$worldpay_args['name'].':'.$worldpay_args['email'].':'.$worldpay_args['address1'].':'.$worldpay_args['postcode'];
+			$build_signature = self::get_md5_secret( $settings['worldpaymd5'], $settings['developer'] ).':'.$worldpay_args['instId'].':'.$worldpay_args['amount'].':'.$worldpay_args['currency'].':'.$worldpay_args['cartId'].':'.$worldpay_args['name'].':'.$worldpay_args['email'].':'.$worldpay_args['address1'].':'.$worldpay_args['postcode'];
 
 			$worldpay_args['signature'] = md5( $build_signature );
 
@@ -260,7 +294,7 @@ class WC_Gateway_WorldPay_Request {
 		} elseif( class_exists( 'WC_Subscriptions' ) && WC_Subscriptions_Order::order_contains_subscription( $order_id ) ) {
 			return WC_Subscriptions_Order::get_total_initial_payment( $order );
 		} else {
-			return $order_total;
+			return apply_filters( 'get_worldpay_order_amount', $order_total, $order_id );
 		}
 
 	} // get_worldpay_order_amount

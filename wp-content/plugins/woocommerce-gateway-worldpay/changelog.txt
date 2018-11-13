@@ -1,4 +1,25 @@
 *** WorldPay Changelog ***
+2018.11.08 - version 3.6.6
+ * WC 3.5 Notice
+
+2018.06.21 - version 3.6.5
+ * WC 3.4 compatibility
+ * Additional logging
+ * Fix callback URL for non-standard file structure
+ 
+2018.06.14 - version 3.6.4
+ * Fix Notice: PHP Warning:  Illegal string offset
+ * add filter "get_worldpay_order_amount"
+
+2018.03.02 - version 3.6.3
+ * Fix Notice: Undefined index: developer
+
+2018.01.25 - version 3.6.2
+ * Add developer option to make my life easier when helping debug issues.
+ * Woo update headers
+ * WC tested up to headers
+ * Replace deprecated cancelled_subscription_ hook
+
 2017.08.17 - version 3.6.1
  * Fix Non-static method
  * set failure url to HTTP
